@@ -41,6 +41,10 @@ import pandas as pd
 import altair as alt
 alt.data_transformers.enable("vegafusion")
 import numpy as np
+import shapely
+from shapely import Polygon, Point
+import geopandas as gpd
+import matplotlib.pyplot as plt
 ```
 
 1. (Partner 1) This is a fairly large dataset and we won’t be using most of the variables. Read through the rest of the problem set and look through the data dictionary to identify which variables you will need to complete the exercise, and use the tool on data.cms.gov into restrict to those variables (“Manage Columns”) before exporting(“Export”). Download this for 2016 and call it pos2016.csv. What are the variables you pulled?
@@ -118,7 +122,7 @@ Comparing plot1 and plot2, it looks as if even after we restrict our number of h
 
 ## Identify hospital closures in POS file (15 pts) (*)
 
-1. 
+1. Use this definition to create a list of all hospitals that were active in 2016 that were suspected to have closed by 2019. Record the facility name and zip of each hospital as well as the year of suspected closure (when they become terminated or disappear from the data). How many hospitals are there that fit this definition?
 
 ```{python}
 #create indicator for hospitals acitve in 2016
@@ -160,8 +164,7 @@ len(inactive_hospitals["PRVDR_NUM"].unique())
 
 There are 174 hospitals that became inactive at some point between 2016 and 2019.
 
-2. 
-
+2. Sort this list of hospitals by name and report the names and year of suspected closure for the first 10 rows.
 ```{python}
 #drop duplicates
 inactive_hospitals_nodup = inactive_hospitals.drop_duplicates(subset="PRVDR_NUM")
@@ -171,7 +174,7 @@ inactive_hospitals_nodup[["FAC_NAME", "inactive_year"]].sort_values(
   "FAC_NAME").head(10)
 ```
 
-3. 
+3. Among the suspected closures, how many hospitals fit this definition of potentially being a merger/acquisition? After correcting for this, how many hospitals do you have left? Sort this list of corrected hospital closures by name and report the first 10 rows.
 
 ```{python}
 #calculate number of active hospitals in each zipcode by year
@@ -212,8 +215,37 @@ inactive_hospitals[["FAC_NAME", "inactive_year"]].sort_values(
 
 ## Download Census zip code shapefile (10 pt) 
 
-1. 
-2. 
+1.  This is non-tabular data. What are the five file types? What type of information is in each file? It will be useful going forward to have a sense going forward of which files are big versus small. After unzipping, how big is each of the datasets?
+
+The first file type is a DBF. This is in a database file format, which is used to store tabular attribute data. It is 6,725KB. The second file type is a PRJ file, which stores Coordinate Reference System information. It is 1 KB. The third file is a SHP file, which is a feature geometry. The fourth file is a SHX file, which is a positional index of the feature geomtery. It is 817,915 KB. The fifth file type is an XML file that consists of International Organization for Standardization (ISO 191) metadata in Extensible Markup Language (XML) format and entity and attribute of ISO 191 metadata in XML format. It is 16 KB.
+
+
+2. Load the zip code shapefile and restrict to Texas zip codes. (Hint: you can identify which state a zip code is in using the first 2-3 numbers in the zip code (Wikipedia link). Then calculate the number of hospitals per zip code in 2016 based on the cleaned POS file from the previous step. Plot a choropleth of the number of hospitals by zip code in Texas.
+```{python}
+#Loading the shapefile
+shapefile = "data/gz_2010_us_860_00_500k.shp"
+census_data = gpd.read_file(shapefile)
+
+#Filter by shapefile zipcode
+texas_zipcodes = ("75", "76", "77", "78", "79")
+texas_census_data = census_data[census_data['ZCTA5'].str.startswith(texas_zipcodes)]
+
+#Filter hospital data by zipcode
+texas_pos_data_2016 = pos[(pos['STATE_CD']== 'TX') & (pos["year"] == 2016)]
+texas_pos_data_2016_zip = texas_pos_data_2016.groupby('ZIP_CD')['PRVDR_NUM'].count().reset_index()
+texas_pos_data_2016_zip['zip_string'] = texas_pos_data_2016_zip['ZIP_CD'].astype(int).astype(str)
+
+#Creating a choropleth
+#Used source:https://towardsdatascience.com/lets-make-a-map-using-geopandas-pandas-and-matplotlib-to-make-a-chloropleth-map-dddc31c1983d
+texas_pos_data_2016_map = texas_census_data.set_index("NAME").join(texas_pos_data_2016_zip.set_index('zip_string'))
+texas_pos_data_2016_map['PRVDR_NUM'] = texas_pos_data_2016_map['PRVDR_NUM'].fillna(0)
+
+texas_pos_data_2016_map.plot(column='PRVDR_NUM', legend=True)
+plt.title("Texas Hospitals by Zipcode 2016")
+plt.axis("off")
+plt.show()
+```
+
 
 ## Calculate zip code’s distance to the nearest hospital (20 pts) (*)
 

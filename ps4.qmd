@@ -130,15 +130,17 @@ pos["active_2016"] = np.where(
   (pos["year"]==2016) & (pos["PGM_TRMNTN_CD"]==0), 1, 0)
 pos["active_2016"] = pos.groupby("PRVDR_NUM")["active_2016"].transform("max")
 
-#find max year each hospital appears as active in dataset
+#find max year each hospital appears in dataset
 pos["max_year"] = pos.groupby("PRVDR_NUM")["year"].transform("max")
 
 #create indicator if hospital is ever not active
 pos["ever_inactive"] = np.where(
   pos.groupby("PRVDR_NUM")["PGM_TRMNTN_CD"].transform("max")!=0, 1, 0)
 
-#keep hospitals active in 2016 and no longer active
-inactive_hospitals = pos.loc[(pos["active_2016"]==1) & (pos["ever_inactive"]==1)]
+#keep hospitals active in 2016 and no longer active 
+#or hospitals active in 2016 and disappear before 2019
+inactive_hospitals = pos.loc[((pos["active_2016"]==1) & (pos["ever_inactive"]==1)) |
+  ((pos["active_2016"]==1) & (pos["max_year"]!=2019))]
 
 #groupby hospital and status 
 grouped = inactive_hospitals.groupby(
@@ -204,9 +206,11 @@ inactive_hospitals = inactive_hospitals.loc[
   (inactive_hospitals["lag_n_fac_zip"] > inactive_hospitals["n_fac_zip"])]
 ```
 
-**i** Before this correction, there were 174 hospitals that had a suspected closure between 2016 and 2019. After this correction, there are 167 hospitals that had a suspected closure, meaning there are 7 suspected mergers/aquisitions. 
+**a** Before this correction, there were 174 hospitals that had a suspected closure between 2016 and 2019. After this correction, there are 167 hospitals that had a suspected closure, meaning there are 7 suspected mergers/aquisitions. 
 
-**ii** 
+**b** There are 167 hospitals with a suspected closure after correcting for this.
+
+**c** 
 ```{python}
 #sort by facility name and print first 10 rows
 inactive_hospitals[["FAC_NAME", "inactive_year"]].sort_values(
@@ -237,7 +241,8 @@ texas_pos_data_2016_zip['zip_string'] = texas_pos_data_2016_zip['ZIP_CD'].astype
 
 #Creating a choropleth
 #Used source:https://towardsdatascience.com/lets-make-a-map-using-geopandas-pandas-and-matplotlib-to-make-a-chloropleth-map-dddc31c1983d
-texas_pos_data_2016_map = texas_census_data.set_index("NAME").join(texas_pos_data_2016_zip.set_index('zip_string'))
+texas_pos_data_2016_map = texas_census_data.set_index("NAME").join(
+  texas_pos_data_2016_zip.set_index('zip_string'))
 texas_pos_data_2016_map['PRVDR_NUM'] = texas_pos_data_2016_map['PRVDR_NUM'].fillna(0)
 
 texas_pos_data_2016_map.plot(column='PRVDR_NUM', legend=True)
@@ -250,9 +255,63 @@ plt.show()
 ## Calculate zip code’s distance to the nearest hospital (20 pts) (*)
 
 1. 
+
+```{python}
+#create geodataframe that is centroids of all zipcodes nationally
+zips_all_centroids = census_data.centroid.reset_index(name="centroid")
+zips_all_centroids.head()
+```
+
+The resulting GeoDataFrame has 33,120 rows and 2 columns. The first column is the index. The second column is the point geometry of the centroid which contains the longitude and latitude coordinates of each zip code centroid.
+
 2. 
+
+```{python}
+#create geodataframe that is centroids of Texas zipcodes
+zips_texas_centroids = texas_census_data.centroid.reset_index(
+  name="centroid")
+len(zips_texas_centroids)
+```
+
+There are 1,935 zipcodes in Texas.
+
+```{python}
+#create list of border state prefixes and texas prefixes
+border_zips = np.append(texas_zipcodes, [
+  "70", "71", "72", "73", "74", "87", "880", "881", "882", "883", "884"])
+border_zips = tuple(border_zips)
+
+#create centroids of texas and borderstate zipcodes
+zips_texas_borderstates_centroids = census_data[
+  census_data["ZCTA5"].str.startswith(border_zips)].centroid.reset_index()
+len(zips_texas_borderstates_centroids)
+```
+
+There are 4,057 zipcodes in Texas or in states that border Texas. 
+
 3. 
+
+```{python}
+#turn zipcode in hospital data to string
+active_count["ZCTA5"] = active_count["ZIP_CD"].astype(int).astype(str)
+
+#keep only zipcodes with active hospitals in 2016
+active_count_2016 = active_count.loc[active_count["year"]==2016]
+
+#keep polygons with active hospitals in 2016
+hosp_active_2016 = pd.merge(census_data, active_count_2016, on="ZCTA5", how="inner")
+
+#spatial join centroids with kept polygons
+#I googled geopandas spatial join syntax and used this website as a guide
+#https://geopandas.org/en/stable/docs/reference/api/geopandas.sjoin.html
+zips_withhospital_centroids = gpd.sjoin(zips_texas_borderstates_centroids, 
+  hosp_active_2016, how="inner", predicate="within")
+```
+
+I first merged the list of zipcodes with active hospitals in 2016 from the previous sections to the census zipcode shapefile, merging on zipcode ("ZCTA5"). Then I performed a spatial join of the file containing polygons for zipcodes with active hospitals with the file containing Texas and border state centroids. The spatial join keeps centroids that are within the polygons in the active hosptial zipcode GeoDataFrame.
+
 4. 
+
 5. 
 
 ## Effects of closures on access in Texas (15 pts)

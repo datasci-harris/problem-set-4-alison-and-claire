@@ -447,12 +447,19 @@ mean_distance_val
 The average distance for zipcodes in Texas to a zipcode with a hospital is 0.208 degrees.
 
 **b**
-This is in degrees. To calculate the average distance in miles, we multiply by 69.17. So the average distance is 14.352 miles. This value represents the average distance for each zipcode in Texas to a zipcode with at least one hospital. This seems fairly reasonable to me. It actually is lower than what I was expecting, given that Texas is so large and has very rural counties. I would have expected some rural counties to be farther away from hospitals.
+
+```{python}
+#calculate average minimum distance to hospital
+mean_distance_mi = zips_texas_centroids["min_dist"].mean()*69.17
+mean_distance_mi
+```
+
+This is in degrees. To calculate the average distance in miles, we multiply by 69.17. So the average distance is 14.392 miles. This value represents the average distance for each zipcode in Texas to a zipcode with at least one hospital. This seems fairly reasonable to me. It actually is lower than what I was expecting, given that Texas is so large and has very rural counties. I would have expected some rural counties to be farther away from hospitals.
 
 **c**
 ```{python}
 #map the value to all zipcodes
-zips_texas_centroids = zips_texas_centroids.assign(mean_distance=mean_distance_val)
+zips_texas_centroids = zips_texas_centroids.assign(mean_distance=mean_distance_mi)
 ```
 
 ## Effects of closures on access in Texas (15 pts)

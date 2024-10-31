@@ -2,7 +2,12 @@
 title: "PS4: Spatial"
 author: "Alison Filbey and Claire Conzelmann " 
 date: "today"
-format: pdf
+format: 
+    pdf: 
+        include-in-header:
+            text:
+                \usepackage{fvextra}
+                \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
 geometry: margin=1in
 fontsize: 12pt
 execute:
@@ -140,7 +145,8 @@ pos["ever_inactive"] = np.where(
 
 #keep hospitals active in 2016 and no longer active 
 #or hospitals active in 2016 and disappear before 2019
-inactive_hospitals = pos.loc[((pos["active_2016"]==1) & (pos["ever_inactive"]==1)) |
+inactive_hospitals = pos.loc[
+  ((pos["active_2016"]==1) & (pos["ever_inactive"]==1)) |
   ((pos["active_2016"]==1) & (pos["max_year"]!=2019))]
 
 #groupby hospital and status 
@@ -155,7 +161,8 @@ grouped = grouped.rename({"year":"inactive_year"}, axis=1).drop(
   "PGM_TRMNTN_CD", axis=1)
 
 #merge inactive year into inactive hospitals df
-inactive_hospitals= pd.merge(inactive_hospitals, grouped, on="PRVDR_NUM", how="left")
+inactive_hospitals= pd.merge(
+  inactive_hospitals, grouped, on="PRVDR_NUM", how="left")
 
 #keep requested variables
 inactive_hospitals = inactive_hospitals[[
@@ -276,10 +283,55 @@ len(zips_texas_centroids)
 
 There are 1,935 zipcodes in Texas.
 
+I had already written the code to use a function to check if zipcodes bordered texas before this question was changed to be simpler. Based off Professor Shi's [comment on Ed](https://edstem.org/us/courses/67241/discussion/5611770?answer=13010873) stating we could get extra credit if we had done this already, I am leaving my code the way it is instead of changing it based off the new question. 
 ```{python}
-#create list of border state prefixes and texas prefixes
-border_zips = np.append(texas_zipcodes, [
-  "70", "71", "72", "73", "74", "87", "880", "881", "882", "883", "884"])
+#dissolve zipcodes within texas so it's a singular polygon
+texas_dissolved = texas_census_data.dissolve()
+
+#determine which zipcodes border texas
+def check_intersections(poly1, poly2):
+    """
+    Determine if poly1 and poly2 intersect
+
+    Parameters:
+    -poly1 and poly2 are singular polygons
+
+    Returns:
+    -a boolean (True or False) indicating if the polygons intersect
+    """
+
+    intersects = poly1.intersects(poly2)[0]
+    return intersects
+
+#create an empty dictionary to store results
+tx_bordering_zips = {"ZCTA5": [], "borders_tx": []}
+
+for row in range(len(census_data)):
+  #iterate through each polygon in census data and check if it intersects texas
+  intersects = check_intersections(
+    texas_dissolved["geometry"], census_data["geometry"][row])
+    
+  #get zip code of current polygon
+  zipcode = census_data["ZCTA5"][row]
+    
+  #store results
+  tx_bordering_zips["ZCTA5"].append(zipcode)
+  tx_bordering_zips["borders_tx"].append(intersects)
+
+tx_bordering_zips = pd.DataFrame(tx_bordering_zips)
+
+#keep only zipcodes that border texas and extract first two digits to find state prefix
+tx_bordering_zips = tx_bordering_zips.loc[tx_bordering_zips["borders_tx"] == 1]
+tx_bordering_zips["state_prefix"] = tx_bordering_zips["ZCTA5"].str[:2]
+
+#find state prefixes
+border_zips = tx_bordering_zips["state_prefix"].unique()
+
+#using Wikipedia page from Pset, make sure all prefixes for border states are in list
+#need to do this because counties that border TX do not account for all prefixes in given border state 
+border_zips = np.append(border_zips, [
+  "87", "72", "880", "881", "882", "883", "884"])
+border_zips = np.delete(border_zips, 9)
 border_zips = tuple(border_zips)
 
 #create centroids of texas and borderstate zipcodes
@@ -306,7 +358,8 @@ hosp_active_2016 = pd.merge(census_data, active_count_2016, on="ZCTA5", how="inn
 #I googled geopandas spatial join syntax and used this website as a guide
 #https://geopandas.org/en/stable/docs/reference/api/geopandas.sjoin.html
 zips_withhospital_centroids = gpd.sjoin(zips_texas_borderstates_centroids, 
-  hosp_active_2016, how="inner", predicate="within")
+  hosp_active_2016, 
+  how="inner", predicate="within")
 ```
 
 I first merged the list of zipcodes with active hospitals in 2016 from the previous sections to the census zipcode shapefile, merging on zipcode ("ZCTA5"). Then I performed a spatial join of the file containing polygons for zipcodes with active hospitals with the file containing Texas and border state centroids. The spatial join keeps centroids that are within the polygons in the active hosptial zipcode GeoDataFrame.
@@ -387,7 +440,8 @@ The .prj file tells us the unit is in degrees. The true conversion from degrees 
 **a**
 ```{python}
 #calculate average minimum distance to hospital
-zips_texas_centroids["min_dist"].mean()
+mean_distance_val = zips_texas_centroids["min_dist"].mean()
+mean_distance_val
 ```
 
 The average distance for zipcodes in Texas to a zipcode with a hospital is 0.208 degrees.
@@ -396,7 +450,10 @@ The average distance for zipcodes in Texas to a zipcode with a hospital is 0.208
 This is in degrees. To calculate the average distance in miles, we multiply by 69.17. So the average distance is 14.352 miles. This value represents the average distance for each zipcode in Texas to a zipcode with at least one hospital. This seems fairly reasonable to me. It actually is lower than what I was expecting, given that Texas is so large and has very rural counties. I would have expected some rural counties to be farther away from hospitals.
 
 **c**
-
+```{python}
+#map the value to all zipcodes
+zips_texas_centroids = zips_texas_centroids.assign(mean_distance=mean_distance_val)
+```
 
 ## Effects of closures on access in Texas (15 pts)
 
@@ -406,3 +463,7 @@ This is in degrees. To calculate the average distance in miles, we multiply by 6
 4. 
 
 ## Reflecting on the exercise (10 pts) 
+
+1. 
+
+2. Having at least one closure or being near a zipcode with at least one closure could measure some level of affectedness, but it's possible that if one zipcode had multiple hospitals and only one of them closed, the remaining hospitals were still able to provide adequate care for the surrounding population. Perhaps it would be better to classify zipcodes as affected if they were in or near a zipcode that had a closure of its only hospital. Or we could look at why the hospitals closed. If a hospital closed because there was population decline in the area and the services were no longer needed, then that zipcode probably wouldn't be greatly affected. But if there was no population change and a hospital closed, then perhaps we could assume that zipcode would be more affected, as the population would not be able to receive the medical services they need.

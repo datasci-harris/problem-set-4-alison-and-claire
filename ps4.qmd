@@ -45,6 +45,7 @@ import shapely
 from shapely import Polygon, Point
 import geopandas as gpd
 import matplotlib.pyplot as plt
+import time
 ```
 
 1. (Partner 1) This is a fairly large dataset and we won’t be using most of the variables. Read through the rest of the problem set and look through the data dictionary to identify which variables you will need to complete the exercise, and use the tool on data.cms.gov into restrict to those variables (“Manage Columns”) before exporting(“Export”). Download this for 2016 and call it pos2016.csv. What are the variables you pulled?
@@ -118,7 +119,7 @@ plot2 = alt.Chart(pos, width=300, height=300, title='Number of Unique Hospitals 
 plot2
 ```
 
-Comparing plot1 and plot2, it looks as if even after we restrict our number of hospitals to hose with unique CMS certification numbers, the the number of hospitals per year remains constant. This tells us that the CMS certification number is a unique identifier of our data as every hospital has exactly one unique CMS number.
+Comparing plot1 and plot2, it looks as if even after we restrict our number of hospitals to those with unique CMS certification numbers, the the number of hospitals per year remains constant. This tells us that the CMS certification number is a unique identifier of our data as every hospital has exactly one unique CMS number.
 
 ## Identify hospital closures in POS file (15 pts) (*)
 
@@ -312,7 +313,90 @@ I first merged the list of zipcodes with active hospitals in 2016 from the previ
 
 4. 
 
+**a**
+```{python}
+#subset to 10 zipcodes in Texas first
+zips_texas_centroids_subset = zips_texas_centroids.head(10)
+
+#reset index to loop through indices sequentially
+zips_texas_centroids_subset = zips_texas_centroids_subset.reset_index(drop=True)
+zips_withhospital_centroids = zips_withhospital_centroids.reset_index(drop=True)
+
+#set start time
+start_time = time.time()
+
+#calculate nearest distance
+for geom1 in range(len(zips_texas_centroids_subset)):
+  #create empty list to hold distances for given centroid/zipcode
+  distances = []
+
+  for geom2 in range(len(zips_withhospital_centroids)):
+    #loop through zips with hospitals and calcualate distance from current tx zipcode
+    #I googled how to calculate distance between two points and used this resource
+    #https://geopandas.org/en/stable/docs/reference/api/geopandas.GeoSeries.distance.html
+    distance = zips_texas_centroids_subset.geometry[geom1].distance(
+      zips_withhospital_centroids.geometry[geom2])
+    distances.append(distance)
+
+  #calculate minimum distance to zip with hospital for this tx zip
+  min_dist = min(distances)
+  zips_texas_centroids_subset.loc[geom1, "min_dist"] = min_dist
+
+#set end time
+end_time = time.time()
+end_time - start_time
+```
+
+It took 0.07 seconds for this code to run on a subset of 10 texas zipcodes. There are 1,935 total Texas zipcodes, so on the full dataset, it should take approximately 13.54 seconds.
+
+**b**
+```{python}
+#reset index to loop through indices sequentially
+zips_texas_centroids = zips_texas_centroids.reset_index(drop=True)
+zips_withhospital_centroids = zips_withhospital_centroids.reset_index(drop=True)
+
+#set start time
+start_time = time.time()
+
+#calculate nearest distance
+for geom1 in range(len(zips_texas_centroids)):
+  #create empty list to hold distances for given centroid/zipcode
+  distances = []
+
+  for geom2 in range(len(zips_withhospital_centroids)):
+    #loop through zips with hospitals and calcualate distance from current tx zipcode
+    distance = zips_texas_centroids.geometry[geom1].distance(
+      zips_withhospital_centroids.geometry[geom2])
+    distances.append(distance)
+
+  #calculate minimum distance to zip with hospital for this tx zip
+  min_dist = min(distances)
+  zips_texas_centroids.loc[geom1, "min_dist"] = min_dist
+
+#set end time
+end_time = time.time()
+end_time - start_time
+```
+
+It took 11.7 seconds for this to run on the full sample of Texas zipcodes. This is somewhat close but 3 seconds off of my initial estimate of how long it would take.
+
+**c**
+The .prj file tells us the unit is in degrees. The true conversion from degrees to miles takes into account the degree of latitude, but we will approximate and use the formula that 1 mile is equal to 69.17 degrees. (I used [this source](https://www.usgs.gov/faqs/how-much-distance-does-a-degree-minute-and-second-cover-your-maps#:~:text=One%20degree%20of%20latitude%20equals,one%20second%20equals%2080%20feet.) for the conversion )
+
 5. 
+**a**
+```{python}
+#calculate average minimum distance to hospital
+zips_texas_centroids["min_dist"].mean()
+```
+
+The average distance for zipcodes in Texas to a zipcode with a hospital is 0.208 degrees.
+
+**b**
+This is in degrees. To calculate the average distance in miles, we multiply by 69.17. So the average distance is 14.352 miles. This value represents the average distance for each zipcode in Texas to a zipcode with at least one hospital. This seems fairly reasonable to me. It actually is lower than what I was expecting, given that Texas is so large and has very rural counties. I would have expected some rural counties to be farther away from hospitals.
+
+**c**
+
 
 ## Effects of closures on access in Texas (15 pts)
 

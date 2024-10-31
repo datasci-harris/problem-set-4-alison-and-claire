@@ -257,9 +257,100 @@ plt.show()
 
 ## Effects of closures on access in Texas (15 pts)
 
-1. 
-2. 
-3. 
-4. 
+1. Using the corrected hospital closures dataset from the first section, create a list of directly affected zip codes in Texas – that is, those with at least one closure in 2016-2019. Display a table of the number of closures by zipcode.
+
+```{python}
+#Creating a Texas dataset that only contains hospitals that were ever inactive 
+texas_pos_data_inactive = pos[(pos['STATE_CD']== 'TX') & (pos['ever_inactive']== 1)]
+#Grouping this by zipcode 
+texas_pos_data_group = texas_pos_data_inactive.groupby('ZIP_CD')['ever_inactive'].sum().reset_index()
+print(texas_pos_data_group)
+```
+
+2. Plot a choropleth of which Texas zip codes were directly affected by a closure in 2016-2019 – there was at least one closure within the zip code. How many directly affected zip codes are there in Texas?
+```{python}
+#Creating a string variable
+texas_pos_data_group['zip_string'] = texas_pos_data_group['ZIP_CD'].astype(int).astype(str)
+
+#Filtering by directly affected zipcodes 
+texas_inactive_zipcodes = texas_pos_data_group['ZIP_CD'].astype(int).astype(str).tolist()
+texas_census_data_inactive = texas_census_data[texas_census_data['NAME'].isin(texas_inactive_zipcodes)]
+
+#Joining the shapefile
+texas_pos_data_group_map = texas_inactive_zipcodes.set_index("NAME").join(texas_pos_data_group.set_index('zip_string'))
+texas_pos_data_group_map['ever_inactive'] = texas_pos_data_group_map['ever_inactive'].fillna(0)
+
+#Creating the choropleth
+texas_pos_data_group_map.plot(column='ever_inactive', legend=True)
+plt.title("Texas Hospitals That Were Ever Inactive by Zipcode")
+plt.axis("off")
+plt.show()
+
+#Number of directly affected zipcodes
+len(texas_inactive_zipcodes)
+```
+
+There are 343 directly affected zipcodes.
+
+3. Then identify all the indirectly affected zip codes: Texas zip codes within a 10-mile radius of the directly affected zip codes. To do so, first create a GeoDataFrame of the directly affected zip codes. Then create a 10-mile buffer around them. Then, do a spatial join with the overall Texas zip code shapefile. How many indirectly affected zip codes are there in Texas?
+
+```{python}
+#Used the following sources first to understand how to create a 10 mile buffer and second looked up the EPSG
+#https://epsg.io/3081
+#https://stackoverflow.com/questions/51263138/how-to-create-an-accurate-buffer-of-5-miles-around-a-coordinate-in-python
+#Creating a 10 mile buffer
+texas_census_data_inactive = texas_census_data_inactive.to_crs(epsg=3081)
+buffer_10_miles = (10 * 1000) * 1.60934
+texas_census_data_inactive['geometry_10_miles'] = texas_census_data_inactive.geometry.buffer(buffer_10_miles)
+
+#Creating a GeoPandas dataframe with the 10 miles surrounding 
+#
+ten_mile_radius = texas_census_data_inactive.set_geometry('geometry_10_miles')
+
+ten_mile_radius = gpd.GeoDataFrame(geometry=texas_census_data_inactive['geometry_10_miles'])
+
+#Ensuring the Texas census data uses the same EPSG
+texas_census_data = texas_census_data.to_crs(epsg=3081)
+
+texas_census_data_ten = gpd.sjoin_nearest(
+ten_mile_radius, 
+texas_census_data,
+how='inner',
+distance_col="distance"
+)
+
+texas_dist_miles_zipcodes = texas_census_data_ten['ZCTA5'].unique().tolist()
+len(texas_dist_miles_zipcodes)
+
+```
+
+There are 1857 zipcodes, and since there are 343 directly affected areas included there are 1,523 indirectly affected zipcodes. 
+
+4. Make a choropleth plot of the Texas zip codes with a different color for each of the 3 categories: directly affected by a closure, within 10 miles of closure but not directly affected, or not affected.
+
+```{python}
+
+#Creating a Texas dataset
+texas_pos_data = pos[(pos['STATE_CD']== 'TX')]
+
+#Grouping by zip code and creating a string variable of zipcode
+all_texas_zipcodes = texas_pos_data.groupby('ZIP_CD')['ever_inactive'].sum().reset_index()
+all_texas_zipcodes['zip_string'] = all_texas_zipcodes['ZIP_CD'].astype(int).astype(str)
+
+#Joining with the geo data and creating an indicator variable of whether a zipcode was directly affected, indirectly affected, or not affected. 
+texas_pos_data_all_map = texas_census_data.set_index("NAME").join(all_texas_zipcodes.set_index('zip_string'))
+texas_pos_data_all_map['category'] = np.where(texas_pos_data_all_map['ZCTA5'].isin(texas_inactive_zipcodes), "Directly Affected", "Not Affected")
+texas_pos_data_all_map['category'] = np.where((texas_pos_data_all_map['category'] != "Directly Affected") & (texas_pos_data_all_map['ZCTA5'].isin(texas_dist_miles_zipcodes)), "Indirectly Affected", texas_pos_data_all_map['category'])
+len(texas_pos_data_all_map[texas_pos_data_all_map['category']=="Indirectly Affected"])
+
+#Creating a choropleth
+texas_pos_data_all_map.plot(column='category', legend=True)
+plt.title("Texas Zipcodes by Hospital Closure Impact")
+plt.axis("off")
+plt.show()
+```
 
 ## Reflecting on the exercise (10 pts) 
+1. The “first-pass” method we’re using to address incorrectly identified closures in the data is imperfect. Can you think of some potential issues that could arise still and ways to do a better job at confirming hospital closures?
+
+One issue that could arise from this is 

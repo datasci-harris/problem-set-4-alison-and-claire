@@ -418,6 +418,8 @@ for geom1 in range(len(zips_texas_centroids)):
 
   for geom2 in range(len(zips_withhospital_centroids)):
     #loop through zips with hospitals and calcualate distance from current tx zipcode
+    #I googled how to calculate distance between points and used this example
+    #https://geopandas.org/en/stable/docs/reference/api/geopandas.GeoSeries.distance.html
     distance = zips_texas_centroids.geometry[geom1].distance(
       zips_withhospital_centroids.geometry[geom2])
     distances.append(distance)

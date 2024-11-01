@@ -485,10 +485,11 @@ texas_inactive_zipcodes = texas_pos_data_group['zip_string'].astype(int).astype(
 
 #Joining the shapefile
 texas_pos_data_group_map = texas_census_data.set_index("NAME").join(texas_pos_data_group.set_index('zip_string'))
-texas_pos_data_group_map['PRVDR_NUM'] = texas_pos_data_group_map['PRVDR_NUM'].fillna(0)
 
 #Creating the choropleth
-texas_pos_data_group_map.plot(column='PRVDR_NUM', legend=True)
+#Used this website for reference on how to set the outline for zipcodes with missing values
+#https://stackoverflow.com/questions/73848143/using-missing-kwds-with-geopandas-changes-the-shape-of-the-displayed-map
+texas_pos_data_group_map.plot(column='PRVDR_NUM', legend=True, missing_kwds=dict(color="lightgray"), categorical=True)
 plt.title("Texas Hospitals That Were Ever Inactive by Zipcode")
 plt.axis("off")
 plt.show()

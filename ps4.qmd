@@ -459,8 +459,18 @@ This is in degrees. To calculate the average distance in miles, we multiply by 6
 
 **c**
 ```{python}
-#map the value to all zipcodes
-zips_texas_centroids = zips_texas_centroids.assign(mean_distance=mean_distance_mi)
+#convert distance to nearest hospital to miles
+zips_texas_centroids["min_dist_mi"] = zips_texas_centroids["min_dist"]*69.17
+
+#merge centroids back to zipcode data
+zips_texas_w_centroids = gpd.sjoin(texas_census_data, zips_texas_centroids,
+  how="left", predicate="contains")
+
+#map average minimum distance to hosptial for each zipcode
+zips_texas_w_centroids.plot(column="min_dist_mi", legend=True)
+plt.title("Average Distance (in miles) to Nearest Hospital by Texas Zipcode")
+plt.axis("off")
+plt.show()
 ```
 
 ## Effects of closures on access in Texas (15 pts)

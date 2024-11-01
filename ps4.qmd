@@ -469,27 +469,26 @@ zips_texas_centroids = zips_texas_centroids.assign(mean_distance=mean_distance_m
 
 ```{python}
 #Creating a Texas dataset that only contains hospitals that were ever inactive 
-texas_pos_data_inactive = pos[(pos['STATE_CD']== 'TX') & (pos['ever_inactive']== 1)]
+inactive_hospitals['zip_string'] = inactive_hospitals['ZIP_CD'].astype(int).astype(str)
+texas_pos_data_inactive = inactive_hospitals[inactive_hospitals['zip_string'].str.startswith(texas_zipcodes)]
+
 #Grouping this by zipcode 
-texas_pos_data_group = texas_pos_data_inactive.groupby('ZIP_CD')['ever_inactive'].sum().reset_index()
+texas_pos_data_group = texas_pos_data_inactive.groupby('zip_string')['PRVDR_NUM'].count().reset_index()
 print(texas_pos_data_group)
 ```
 
 2. Plot a choropleth of which Texas zip codes were directly affected by a closure in 2016-2019 – there was at least one closure within the zip code. How many directly affected zip codes are there in Texas?
 ```{python}
-#Creating a string variable
-texas_pos_data_group['zip_string'] = texas_pos_data_group['ZIP_CD'].astype(int).astype(str)
-
 #Filtering by directly affected zipcodes 
-texas_inactive_zipcodes = texas_pos_data_group['ZIP_CD'].astype(int).astype(str).tolist()
-texas_census_data_inactive = texas_census_data[texas_census_data['NAME'].isin(texas_inactive_zipcodes)]
+texas_inactive_zipcodes = texas_pos_data_group['zip_string'].astype(int).astype(str).tolist()
+#texas_census_data_inactive = texas_census_data[texas_census_data['NAME'].isin#(texas_inactive_zipcodes)]
 
 #Joining the shapefile
-texas_pos_data_group_map = texas_inactive_zipcodes.set_index("NAME").join(texas_pos_data_group.set_index('zip_string'))
-texas_pos_data_group_map['ever_inactive'] = texas_pos_data_group_map['ever_inactive'].fillna(0)
+texas_pos_data_group_map = texas_census_data.set_index("NAME").join(texas_pos_data_group.set_index('zip_string'))
+texas_pos_data_group_map['PRVDR_NUM'] = texas_pos_data_group_map['PRVDR_NUM'].fillna(0)
 
 #Creating the choropleth
-texas_pos_data_group_map.plot(column='ever_inactive', legend=True)
+texas_pos_data_group_map.plot(column='PRVDR_NUM', legend=True)
 plt.title("Texas Hospitals That Were Ever Inactive by Zipcode")
 plt.axis("off")
 plt.show()
@@ -498,7 +497,7 @@ plt.show()
 len(texas_inactive_zipcodes)
 ```
 
-There are 343 directly affected zipcodes.
+There are 34 directly affected zipcodes.
 
 3. Then identify all the indirectly affected zip codes: Texas zip codes within a 10-mile radius of the directly affected zip codes. To do so, first create a GeoDataFrame of the directly affected zip codes. Then create a 10-mile buffer around them. Then, do a spatial join with the overall Texas zip code shapefile. How many indirectly affected zip codes are there in Texas?
 
@@ -532,12 +531,11 @@ len(texas_dist_miles_zipcodes)
 
 ```
 
-There are 1857 zipcodes, and since there are 343 directly affected areas included there are 1,523 indirectly affected zipcodes. 
+There are 610 zipcodes, and since there are 34 directly affected areas included there are indirectly affected zipcodes. 
 
 4. Make a choropleth plot of the Texas zip codes with a different color for each of the 3 categories: directly affected by a closure, within 10 miles of closure but not directly affected, or not affected.
 
 ```{python}
-
 #Creating a Texas dataset
 texas_pos_data = pos[(pos['STATE_CD']== 'TX')]
 
@@ -560,5 +558,6 @@ plt.show()
 
 ## Reflecting on the exercise (10 pts) 
 1. The “first-pass” method we’re using to address incorrectly identified closures in the data is imperfect. Can you think of some potential issues that could arise still and ways to do a better job at confirming hospital closures?
+
 
 2. Having at least one closure or being near a zipcode with at least one closure could measure some level of affectedness, but it's possible that if one zipcode had multiple hospitals and only one of them closed, the remaining hospitals were still able to provide adequate care for the surrounding population. Perhaps it would be better to classify zipcodes as affected if they were in or near a zipcode that had a closure of its only hospital. Or we could look at why the hospitals closed. If a hospital closed because there was population decline in the area and the services were no longer needed, then that zipcode probably wouldn't be greatly affected. But if there was no population change and a hospital closed, then perhaps we could assume that zipcode would be more affected, as the population would not be able to receive the medical services they need.
